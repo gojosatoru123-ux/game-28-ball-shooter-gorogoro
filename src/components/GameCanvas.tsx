@@ -36,7 +36,6 @@ export const GameCanvas: React.FC = () => {
   const [currentHandPoint, setCurrentHandPoint] = useState<Point | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isReady, setIsReady] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
 
   const discsRef = useRef<Disc[]>([]);
   const particlesRef = useRef<Particle[]>([]);
@@ -54,49 +53,65 @@ export const GameCanvas: React.FC = () => {
   const shotFXRef = useRef<{ x: number, y: number, life: number }[]>([]);
   const lasersRef = useRef<{ x1: number, y1: number, x2: number, y2: number, life: number }[]>([]);
 
-  // Initialize Camera and Tracker
-  useEffect(() => {
-    let isCanceled = false;
-    async function setup() {
-      setIsLoading(true);
-      setError(null);
+  // Dedicated initialization function allowing synchronous caller gesture
+  const initSystem = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // 1. Request camera access with extremely relaxed constraints to prevent OverconstrainedError
+      // which some mobile browsers mask as permission errors.
+      let stream: MediaStream;
       try {
-        // 1. Immediately request camera access on page load
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" } 
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } } 
         });
-        
-        if (isCanceled) return;
-        
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-
-        // 2. Initialize heavy AI models only after camera is approved
-        await tracker.initialize();
-        
-        if (isCanceled) return;
-
-        if (videoRef.current) {
-          tracker.setVideo(videoRef.current);
-        }
-        
-        setIsReady(true);
-        setIsLoading(false);
-      } catch (err) {
-        console.error("Camera Init Error:", err);
-        setError("Camera access is required. Please check your browser permissions.");
-        setIsLoading(false);
+      } catch (fallbackErr) {
+        console.warn("High-res camera failed, falling back to basic video:", fallbackErr);
+        // Fallback: Absolute basic video request if constraints fail
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
       }
-    }
-    setup();
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
 
+      // 2. Initialize heavy AI models only after camera is approved
+      await tracker.initialize();
+      
+      if (videoRef.current) {
+        tracker.setVideo(videoRef.current);
+      }
+      
+      setIsReady(true);
+      setIsLoading(false);
+    } catch (err: any) {
+      console.error("Camera Init Error:", err);
+      // Detailed error translation for mobile UI
+      let errorMsg = "Camera access failed.";
+      const errStr = String(err.message || err.name || '').toLowerCase();
+      
+      if (err.name === 'NotAllowedError' || errStr.includes('denied') || errStr.includes('permission')) {
+        errorMsg = "CAMERA BLOCKED BY DEVICE. Tap the 'Aa' or 'Lock' icon in your browser's address bar, choose 'Website Settings', allow Camera access, and click Retry.";
+      } else if (err.name === 'NotFoundError') {
+        errorMsg = "No camera hardware detected on this device.";
+      } else {
+        errorMsg = err.message || "Unknown camera error occurred.";
+      }
+      
+      setError(errorMsg);
+      setIsLoading(false);
+    }
+  }, [tracker]);
+
+  // Initial Boot
+  useEffect(() => {
+    initSystem();
+    
     return () => {
-      isCanceled = true;
       const stream = videoRef.current?.srcObject as MediaStream;
       stream?.getTracks().forEach(track => track.stop());
     };
-  }, [tracker, retryCount]);
+  }, [initSystem]);
 
   const spawnDisc = useCallback((width: number, height: number, time: number) => {
     const id = Math.random().toString(36).substring(7);
@@ -745,7 +760,7 @@ export const GameCanvas: React.FC = () => {
       </div>
 
       {/* Main Game Stage */}
-      <div className="relative w-full h-[90vh] landscape:h-full sm:h-auto sm:aspect-video sm:max-w-5xl sm:rounded-2xl overflow-hidden shadow-2xl sm:border sm:border-white/5" 
+      <div className="relative w-full h-full landscape:h-screen sm:h-auto sm:aspect-video sm:max-w-5xl sm:rounded-2xl overflow-hidden shadow-2xl sm:border sm:border-white/5" 
            style={{ background: 'radial-gradient(circle at center, #111827 0%, #05070a 100%)' }}>
         
         {/* Dot Grid Background Overlay */}
@@ -773,7 +788,7 @@ export const GameCanvas: React.FC = () => {
 
         {/* Hand Skeleton Data Panel - Desktop Only */}
         {currentHandPoint && gameState.isStarted && !gameState.isGameOver && (
-          <div className="absolute bottom-8 left-8 hud-glass rounded-2xl p-4 w-64 border-l-4 border-cyan-500 z-20 hidden sm:block">
+          <div className="absolute bottom-8 left-8 hud-glass rounded-2xl p-4 w-64 border-l-4 border-cyan-500 z-20 hidden lg:block">
             <h3 className="text-xs font-bold uppercase tracking-widest mb-3 text-white">Sensor Stream</h3>
             <div className="space-y-2 font-mono text-[10px] text-white/70">
               <div className="flex justify-between font-mono">
@@ -799,17 +814,25 @@ export const GameCanvas: React.FC = () => {
 
         {/* Start Overlay */}
         {!gameState.isStarted && !isLoading && !error && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-30">
-            <div className="text-center p-4 sm:p-12 hud-glass rounded-xl sm:rounded-3xl mx-4 sm:mx-0 max-w-sm sm:max-w-md border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-              <div className="w-10 h-10 sm:w-20 sm:h-20 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-6 border border-cyan-500/30">
-                 <Target className="w-5 h-5 sm:w-10 sm:h-10 text-cyan-400" aria-label="Target Icon" />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-30 p-2">
+            <div className="text-center p-4 sm:p-12 hud-glass rounded-xl sm:rounded-3xl w-full max-w-sm sm:max-w-md border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+              <div className="w-8 h-8 sm:w-20 sm:h-20 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-2 sm:mb-6 border border-cyan-500/30 hidden sm:flex">
+                 <Target className="w-4 h-4 sm:w-10 sm:h-10 text-cyan-400" aria-label="Target Icon" />
               </div>
+              <h1 className="text-xl sm:text-4xl font-black text-white mb-1 sm:mb-3 tracking-tighter uppercase leading-none truncate overflow-hidden whitespace-nowrap">REACTION_LAB</h1>
+              <p className="text-white/50 mb-4 sm:mb-10 text-[8px] sm:text-sm leading-relaxed uppercase tracking-[0.2em] font-medium hidden sm:block">
+                Neural Precision Unit<br />
+                AI_POWERED HAND_TRACKING INTERFACE
+              </p>
+              <p className="text-white/50 mb-3 text-[7px] leading-relaxed uppercase tracking-[0.2em] font-medium sm:hidden">
+                HAND_TRACKING INTERFACE
+              </p>
               <button
                 onClick={startGame}
                 aria-label="Engage Neural System"
-                className="w-full py-3 sm:py-5 px-10 bg-white hover:bg-cyan-400 text-black font-black text-[10px] sm:text-sm uppercase tracking-[0.2em] rounded-lg sm:rounded-xl transition-all hover:scale-105 active:scale-95 shadow-xl"
+                className="w-full py-2.5 sm:py-5 bg-white hover:bg-cyan-400 text-black font-black text-[10px] sm:text-sm uppercase tracking-[0.2em] rounded-lg sm:rounded-xl transition-all hover:scale-105 active:scale-95 shadow-xl"
               >
-                Enter the arena
+                ENGAGE
               </button>
             </div>
           </div>
@@ -827,40 +850,42 @@ export const GameCanvas: React.FC = () => {
 
         {/* Error Overlay */}
         {error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-50 p-8 text-center text-red-500" role="alert" aria-live="assertive">
-            <AlertCircle className="w-10 h-10 mb-4" />
-            <p className="font-mono text-[10px] uppercase tracking-widest leading-relaxed max-w-xs mb-6">{error}</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/95 z-50 p-6 sm:p-8 text-center text-red-500" role="alert" aria-live="assertive">
+            <AlertCircle className="w-12 h-12 mb-4 animate-bounce" />
+            <h2 className="text-xl font-black mb-2 uppercase tracking-widest text-white">Sensor Link Failed</h2>
+            <p className="font-sans text-[11px] sm:text-xs text-white/80 uppercase tracking-widest leading-relaxed max-w-sm mb-8 bg-red-500/20 p-4 border border-red-500/30 rounded-lg">
+              {error}
+            </p>
             <button 
-              onClick={() => { setError(null); setRetryCount(c => c + 1); }} 
-              className="px-6 py-3 bg-white hover:bg-cyan-400 text-black font-black text-xs uppercase tracking-[0.2em] rounded-lg transition-all hover:scale-105 active:scale-95 shadow-xl"
+              onClick={initSystem} 
+              className="px-8 py-4 bg-white hover:bg-cyan-400 text-black font-black text-sm uppercase tracking-[0.2em] rounded-xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.3)]"
             >
               Retry Connection
             </button>
           </div>
         )}
-      </div>
-
-      {/* Footer */}
-      <div className="mt-4 sm:mt-8 flex flex-wrap justify-center gap-4 sm:gap-8 text-white/40 text-[7px] sm:text-[9px] font-bold uppercase tracking-[0.2em] max-w-3xl px-4 text-center">
-        <div className="flex items-center gap-2">
-           <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_cyan]" />
-           OPTIC: MULTI
-        </div>
-        <div className="flex items-center gap-2">
-           <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-pink-500 shadow-[0_0_8px_pink]" />
-           PULSE: PINCH
-        </div>
-        <div className="flex items-center gap-2 hidden sm:flex">
-           <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_purple]" />
-           SHIELD: MULTI
-        </div>
-        <div className="flex items-center gap-2 hidden sm:flex">
-           <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_orange]" />
-           SPLIT: FRAG
-        </div>
-        <div className="flex items-center gap-2 hidden sm:flex">
-           <div className="w-1.5 h-1.5 rounded-full bg-slate-400 shadow-[0_0_8px_white]" />
-           GHOST: PHASE
+        {/* Internal Footer Overlay */}
+        <div className="absolute bottom-4 left-0 w-full flex flex-wrap justify-center gap-4 sm:gap-8 text-white/40 text-[7px] sm:text-[9px] font-bold uppercase tracking-[0.2em] px-4 text-center z-20 pointer-events-none">
+          <div className="flex items-center gap-2">
+             <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_cyan]" />
+             OPTIC: MULTI
+          </div>
+          <div className="flex items-center gap-2">
+             <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-pink-500 shadow-[0_0_8px_pink]" />
+             PULSE: PINCH
+          </div>
+          <div className="flex items-center gap-2 hidden sm:flex">
+             <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_purple]" />
+             SHIELD: MULTI
+          </div>
+          <div className="flex items-center gap-2 hidden sm:flex">
+             <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_orange]" />
+             SPLIT: FRAG
+          </div>
+          <div className="flex items-center gap-2 hidden sm:flex">
+             <div className="w-1.5 h-1.5 rounded-full bg-slate-400 shadow-[0_0_8px_white]" />
+             GHOST: PHASE
+          </div>
         </div>
       </div>
     </div>

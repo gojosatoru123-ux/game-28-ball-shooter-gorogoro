@@ -9,8 +9,8 @@ export default function App() {
   return (
     <main className="fixed inset-0 w-full h-full bg-[#05070a] flex flex-col items-center justify-center sm:p-4">
       <div className="w-full h-full max-w-[1400px] flex flex-col">
-        <header className="flex-none py-6 px-4 hidden sm:flex justify-between items-center ">
-          <div className="hiddenflex flex-col">
+        <header className="flex-none py-6 px-4 flex justify-between items-center hidden md:flex">
+          <div className="flex flex-col">
             <h1 className="text-white font-black text-3xl tracking-tighter leading-none italic uppercase">
               REACTION<span className="text-cyan-400">LAB</span>
             </h1>
