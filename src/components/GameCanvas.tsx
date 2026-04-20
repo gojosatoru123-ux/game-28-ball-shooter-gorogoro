@@ -59,16 +59,20 @@ export const GameCanvas: React.FC = () => {
     setError(null);
     try {
       // 1. Request camera access with extremely relaxed constraints to prevent OverconstrainedError
-      // which some mobile browsers mask as permission errors.
+      // Performance optimization: Mobile CPU/GPUs struggle heavily with 720p+ frame analysis.
+      // Downlink to 480p or 360p vastly improves MediaPipe inference speed.
       let stream: MediaStream;
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const idealWidth = isMobile ? 640 : 1280;
+      const idealHeight = isMobile ? 480 : 720;
+      
       try {
         stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } } 
+          video: { facingMode: "user", width: { ideal: idealWidth }, height: { ideal: idealHeight } } 
         });
       } catch (fallbackErr) {
         console.warn("High-res camera failed, falling back to basic video:", fallbackErr);
-        // Fallback: Absolute basic video request if constraints fail
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
       }
       
       if (videoRef.current) {
@@ -182,7 +186,11 @@ export const GameCanvas: React.FC = () => {
   }, [gameState.level]);
 
   const createParticles = (x: number, y: number, color: string, type: 'normal' | 'bomb' | 'gold' = 'normal') => {
-    const count = type === 'normal' ? 15 : 30;
+    const isMobile = window.innerWidth <= 1024;
+    // Reduce particle count on mobile by half for rendering performance
+    let baseCount = type === 'normal' ? 15 : 30;
+    const count = isMobile ? Math.floor(baseCount * 0.4) : baseCount;
+
     for (let i = 0; i < count; i++) {
       particlesRef.current.push({
         id: Math.random().toString(36),
@@ -477,10 +485,11 @@ export const GameCanvas: React.FC = () => {
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
+    const ctx = canvas?.getContext('2d', { alpha: false }); // Optimize by telling browser canvas has no opacity under it
     if (!canvas || !ctx) return;
 
     const { width, height } = canvas;
+    const isMobile = window.innerWidth <= 1024;
 
     // Apply Shake
     ctx.save();
@@ -490,7 +499,9 @@ export const GameCanvas: React.FC = () => {
       ctx.translate(dx, dy);
     }
 
-    ctx.clearRect(0, 0, width, height);
+    // Black background (replaces the heavy radial gradient we had on the div which canvas overlays)
+    ctx.fillStyle = '#05070a';
+    ctx.fillRect(0, 0, width, height);
 
     // Draw Blur Background (Cyberpunk feel)
     // Actually, we'll keep it clean for performance
@@ -503,17 +514,29 @@ export const GameCanvas: React.FC = () => {
       ctx.save();
       ctx.globalAlpha = opacity;
       
+      // Hardware Optimization: `shadowBlur` and `createRadialGradient` are GPU killers on mobile.
+      // We fall back to simple fill rectangles and circular alpha overlays for identical "glow" feel.
+      if (!isMobile) {
+        // Radiant glow fill (Sleek Theme) - Desktop ONLY
+        const gradient = ctx.createRadialGradient(disc.x, disc.y, drawRadius * 0.2, disc.x, disc.y, drawRadius);
+        gradient.addColorStop(0, disc.color);
+        gradient.addColorStop(1, 'rgba(0,0,0,0.5)');
+        
+        ctx.fillStyle = gradient;
+        ctx.shadowBlur = disc.type === 'gold' ? 60 : 40;
+        ctx.shadowColor = disc.color;
+      } else {
+        // Mobile fallback glow
+        ctx.fillStyle = disc.color;
+        ctx.beginPath();
+        ctx.arc(disc.x, disc.y, drawRadius * 1.5, 0, Math.PI * 2);
+        ctx.globalAlpha = opacity * 0.2;
+        ctx.fill();
+        ctx.globalAlpha = opacity;
+      }
+      
       ctx.beginPath();
       ctx.arc(disc.x, disc.y, drawRadius, 0, Math.PI * 2);
-      
-      // Radiant glow fill (Sleek Theme)
-      const gradient = ctx.createRadialGradient(disc.x, disc.y, drawRadius * 0.2, disc.x, disc.y, drawRadius);
-      gradient.addColorStop(0, disc.color);
-      gradient.addColorStop(1, 'rgba(0,0,0,0.5)');
-      
-      ctx.fillStyle = gradient;
-      ctx.shadowBlur = disc.type === 'gold' ? 60 : 40;
-      ctx.shadowColor = disc.color;
       ctx.fill();
 
       // Shield layers
@@ -580,8 +603,10 @@ export const GameCanvas: React.FC = () => {
       ctx.fillStyle = t.color;
       ctx.font = 'black 18px Inter';
       ctx.textAlign = 'center';
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = t.color;
+      if (!isMobile) {
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = t.color;
+      }
       ctx.fillText(t.text, t.x, t.y);
       ctx.restore();
     });
@@ -605,8 +630,11 @@ export const GameCanvas: React.FC = () => {
 
         ctx.lineWidth = 1;
         ctx.strokeStyle = index === 0 ? 'rgba(6, 182, 212, 0.8)' : 'rgba(236, 72, 153, 0.8)';
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = index === 0 ? 'rgba(6,182,212,0.5)' : 'rgba(236,72,153,0.5)';
+        
+        if (!isMobile) {
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = index === 0 ? 'rgba(6,182,212,0.5)' : 'rgba(236,72,153,0.5)';
+        }
         
         // Main circular border
         ctx.beginPath();
@@ -656,8 +684,12 @@ export const GameCanvas: React.FC = () => {
       ctx.globalAlpha = laser.life;
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 15 * laser.life;
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = '#00f2fe';
+      
+      if (!isMobile) {
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#00f2fe';
+      }
+      
       ctx.beginPath();
       ctx.moveTo(laser.x1, laser.y1);
       ctx.lineTo(laser.x2, laser.y2);
@@ -760,8 +792,7 @@ export const GameCanvas: React.FC = () => {
       </div>
 
       {/* Main Game Stage */}
-      <div className="relative w-full h-full landscape:h-screen sm:h-auto sm:aspect-video sm:max-w-5xl sm:rounded-2xl overflow-hidden shadow-2xl sm:border sm:border-white/5" 
-           style={{ background: 'radial-gradient(circle at center, #111827 0%, #05070a 100%)' }}>
+      <div className="relative w-full h-full landscape:h-screen sm:h-auto sm:aspect-video sm:max-w-5xl sm:rounded-2xl overflow-hidden shadow-2xl sm:border sm:border-white/5 bg-[#05070a]">
         
         {/* Dot Grid Background Overlay */}
         <div className="absolute inset-0 opacity-10 pointer-events-none" 
