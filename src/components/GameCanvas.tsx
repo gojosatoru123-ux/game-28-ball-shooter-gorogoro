@@ -485,7 +485,7 @@ export const GameCanvas: React.FC = () => {
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d', { alpha: false }); // Optimize by telling browser canvas has no opacity under it
+    const ctx = canvas?.getContext('2d'); 
     if (!canvas || !ctx) return;
 
     const { width, height } = canvas;
@@ -499,9 +499,7 @@ export const GameCanvas: React.FC = () => {
       ctx.translate(dx, dy);
     }
 
-    // Black background (replaces the heavy radial gradient we had on the div which canvas overlays)
-    ctx.fillStyle = '#05070a';
-    ctx.fillRect(0, 0, width, height);
+    ctx.clearRect(0, 0, width, height);
 
     // Draw Blur Background (Cyberpunk feel)
     // Actually, we'll keep it clean for performance
@@ -846,10 +844,7 @@ export const GameCanvas: React.FC = () => {
         {/* Start Overlay */}
         {!gameState.isStarted && !isLoading && !error && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-30 p-2">
-            <div className="text-center p-4 sm:p-12 hud-glass rounded-xl sm:rounded-3xl w-full max-w-sm sm:max-w-md border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-              <div className="w-8 h-8 sm:w-20 sm:h-20 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-2 sm:mb-6 border border-cyan-500/30 hidden sm:flex">
-                 <Target className="w-4 h-4 sm:w-10 sm:h-10 text-cyan-400" aria-label="Target Icon" />
-              </div>
+            <div className="text-center p-2 sm:p-8 hud-glass rounded-xl sm:rounded-3xl w-full max-w-sm sm:max-w-md border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
               <h1 className="text-xl sm:text-4xl font-black text-white mb-1 sm:mb-3 tracking-tighter uppercase leading-none truncate overflow-hidden whitespace-nowrap">REACTION_LAB</h1>
               <button
                 onClick={startGame}
