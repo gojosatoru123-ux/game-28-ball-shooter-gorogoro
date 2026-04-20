@@ -804,13 +804,12 @@ export const GameCanvas: React.FC = () => {
               <div className="w-10 h-10 sm:w-20 sm:h-20 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-6 border border-cyan-500/30">
                  <Target className="w-5 h-5 sm:w-10 sm:h-10 text-cyan-400" aria-label="Target Icon" />
               </div>
-              <h1 className="text-lg sm:text-4xl font-black text-white mb-2 sm:mb-3 tracking-tighter uppercase leading-none">REACTION_LAB | Neural Precision Unit</h1>
               <button
                 onClick={startGame}
                 aria-label="Engage Neural System"
-                className="w-full py-3 sm:py-5 bg-white hover:bg-cyan-400 text-black font-black text-[10px] sm:text-sm uppercase tracking-[0.2em] rounded-lg sm:rounded-xl transition-all hover:scale-105 active:scale-95 shadow-xl"
+                className="w-full py-3 sm:py-5 px-10 bg-white hover:bg-cyan-400 text-black font-black text-[10px] sm:text-sm uppercase tracking-[0.2em] rounded-lg sm:rounded-xl transition-all hover:scale-105 active:scale-95 shadow-xl"
               >
-                ENGAGE
+                Enter the arena
               </button>
             </div>
           </div>
