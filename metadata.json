@@ -1,0 +1,8 @@
+{
+  "name": "REACTION_LAB: Hand-Tracking Cyberpunk Shooter",
+  "description": "Experience the future of browser gaming with REACTION_LAB. Use high-precision AI hand tracking to shoot targets with vision gestures. The ultimate cyberpunk reaction simulation.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}
