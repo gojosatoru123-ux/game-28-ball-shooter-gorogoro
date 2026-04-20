@@ -804,10 +804,7 @@ export const GameCanvas: React.FC = () => {
               <div className="w-10 h-10 sm:w-20 sm:h-20 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-6 border border-cyan-500/30">
                  <Target className="w-5 h-5 sm:w-10 sm:h-10 text-cyan-400" aria-label="Target Icon" />
               </div>
-              <h1 className="text-2xl sm:text-4xl font-black text-white mb-2 sm:mb-3 tracking-tighter uppercase leading-none">REACTION_LAB | Neural Precision Unit</h1>
-              <p className="text-white/50 mb-6 sm:mb-10 text-[8px] sm:text-sm leading-relaxed uppercase tracking-[0.2em] font-medium">
-                AI_POWERED HAND_TRACKING INTERFACE
-              </p>
+              <h1 className="text-lg sm:text-4xl font-black text-white mb-2 sm:mb-3 tracking-tighter uppercase leading-none">REACTION_LAB | Neural Precision Unit</h1>
               <button
                 onClick={startGame}
                 aria-label="Engage Neural System"
